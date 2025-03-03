@@ -55,6 +55,7 @@ import {
   getBaseDimension,
   hasShadowRoot,
   asyncLoop,
+  splitMutationIntoMultipleEvents,
 } from '../utils';
 import getInjectStyleRules from './styles/inject-style';
 import './styles/style.css';
@@ -157,12 +158,22 @@ export class Replayer {
   private lastApplyCancelFn?: () => void;
 
   constructor(
-    events: Array<eventWithTime | string>,
+    originalEvents: Array<eventWithTime | string>,
     config?: Partial<playerConfig>,
   ) {
-    if (!config?.liveMode && events.length < 2) {
+    if (!config?.liveMode && originalEvents.length < 2) {
       throw new Error('Replayer need at least 2 events.');
     }
+
+    const events = originalEvents.reduce((acc, current) => {
+      const evt =
+        config && config.unpackFn
+          ? config.unpackFn(current as string)
+          : (current as eventWithTime);
+      const chunks = splitMutationIntoMultipleEvents(evt);
+      return [...acc, ...chunks];
+    }, []);
+
     const defaultConfig: playerConfig = {
       speed: 1,
       maxSpeed: 360,
@@ -287,14 +298,7 @@ export class Replayer {
     });
     this.service = createPlayerService(
       {
-        events: events
-          .map((e) => {
-            if (config && config.unpackFn) {
-              return config.unpackFn(e as string);
-            }
-            return e as eventWithTime;
-          })
-          .sort((a1, a2) => a1.timestamp - a2.timestamp),
+        events: events.sort((a1, a2) => a1.timestamp - a2.timestamp),
         timer,
         timeOffset: 0,
         baselineTime: 0,
@@ -500,9 +504,13 @@ export class Replayer {
     if (indicatesTouchDevice(event)) {
       this.mouse.classList.add('touch-device');
     }
-    Promise.resolve().then(() =>
-      this.service.send({ type: 'ADD_EVENT', payload: { event } }),
-    );
+    const events = splitMutationIntoMultipleEvents(event);
+
+    Promise.resolve().then(() => {
+      events.forEach((e) =>
+        this.service.send({ type: 'ADD_EVENT', payload: { event: e } }),
+      );
+    });
   }
 
   public enableInteract() {

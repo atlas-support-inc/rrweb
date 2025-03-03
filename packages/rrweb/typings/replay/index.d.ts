@@ -27,7 +27,7 @@ export declare class Replayer {
     private mousePos;
     private touchActive;
     private lastApplyCancelFn?;
-    constructor(events: Array<eventWithTime | string>, config?: Partial<playerConfig>);
+    constructor(originalEvents: Array<eventWithTime | string>, config?: Partial<playerConfig>);
     on(event: string, handler: Handler): this;
     off(event: string, handler: Handler): this;
     setConfig(config: Partial<playerConfig>): void;

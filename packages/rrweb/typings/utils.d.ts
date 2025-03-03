@@ -1,4 +1,4 @@
-import { Mirror, throttleOptions, listenerHandler, hookResetter, blockClass, addedNodeMutation, removedNodeMutation, textMutation, attributeMutation, mutationData, scrollData, inputData, DocumentDimension, IWindow } from './types';
+import { Mirror, throttleOptions, listenerHandler, hookResetter, blockClass, addedNodeMutation, removedNodeMutation, textMutation, attributeMutation, mutationData, scrollData, inputData, DocumentDimension, IWindow, eventWithTime } from './types';
 import { INode, serializedNodeWithId } from 'rrweb-snapshot';
 export declare function on(type: string, fn: EventListenerOrEventListenerObject, target?: Document | IWindow): listenerHandler;
 export declare function createMirror(): Mirror;
@@ -73,4 +73,5 @@ export declare function hasShadowRoot<T extends Node>(n: T): n is T & {
     shadowRoot: ShadowRoot;
 };
 export declare function asyncLoop<T>(items: T[], fn: (item: T, index: number) => void, done: () => void): () => void;
+export declare function splitMutationIntoMultipleEvents(event: eventWithTime): eventWithTime[];
 export {};

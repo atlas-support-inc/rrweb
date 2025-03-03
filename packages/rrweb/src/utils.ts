@@ -14,6 +14,8 @@ import {
   inputData,
   DocumentDimension,
   IWindow,
+  eventWithTime,
+  EventType,
 } from './types';
 import {
   INode,
@@ -22,6 +24,8 @@ import {
   NodeType,
   isShadowRoot,
 } from 'rrweb-snapshot';
+
+const MAX_MUTATION_BATCH = 200;
 
 export function on(
   type: string,
@@ -431,7 +435,10 @@ export class TreeIndex {
   public canvasAttribute(d: attributeMutation) {
     const existingAttribute = this.canvasAttributesMap.get(d.id);
     if (existingAttribute) {
-      this.canvasAttributesMap.set(d.id, Object.assign(existingAttribute, d.attributes));
+      this.canvasAttributesMap.set(
+        d.id,
+        Object.assign(existingAttribute, d.attributes),
+      );
     } else {
       this.canvasAttributesMap.set(d.id, d.attributes);
     }
@@ -713,4 +720,73 @@ export function asyncLoop<T>(
   nextCallbackId = nextFn(processNextEvent);
 
   return cancel;
+}
+
+function chunkArray(
+  array: addedNodeMutation[] | removedNodeMutation[] | attributeMutation[],
+  chunkSize: number,
+) {
+  const result = [];
+  for (let i = 0; i < array.length; i += chunkSize) {
+    result.push(array.slice(i, i + chunkSize));
+  }
+
+  return result;
+}
+
+export function splitMutationIntoMultipleEvents(
+  event: eventWithTime,
+): eventWithTime[] {
+  let eventsToReturn = [event];
+
+  if (
+    event.type === EventType.IncrementalSnapshot &&
+    event.data &&
+    event.data.source === IncrementalSource.Mutation
+  ) {
+    const { adds, removes, attributes } = event.data;
+
+    const totalMutations = adds.length + removes.length + attributes.length;
+    if (totalMutations > MAX_MUTATION_BATCH) {
+      eventsToReturn = [];
+
+      const addsChunks = chunkArray(
+        adds,
+        Math.ceil(adds.length / Math.ceil(totalMutations / MAX_MUTATION_BATCH)),
+      );
+      const removesChunks = chunkArray(
+        removes,
+        Math.ceil(
+          removes.length / Math.ceil(totalMutations / MAX_MUTATION_BATCH),
+        ),
+      );
+      const attributesChunks = chunkArray(
+        attributes,
+        Math.ceil(
+          attributes.length / Math.ceil(totalMutations / MAX_MUTATION_BATCH),
+        ),
+      );
+
+      for (
+        let i = 0;
+        i < addsChunks.length ||
+        i < removesChunks.length ||
+        i < attributesChunks.length;
+        i++
+      ) {
+        const smallerEvent = {
+          ...event,
+          data: {
+            ...event.data,
+            adds: addsChunks[i] || [],
+            removes: removesChunks[i] || [],
+            attributes: attributesChunks[i] || [],
+          },
+        };
+        eventsToReturn.push(smallerEvent as eventWithTime);
+      }
+    }
+  }
+
+  return eventsToReturn;
 }
